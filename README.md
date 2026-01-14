@@ -2,10 +2,12 @@
 
 用于 gmgn.ai 的 Chrome 扩展：在代币列表中标记同名代币的「首发 / 非首发」，并在非首发代币旁提供一键跳转到对应首发代币页面的按钮。
 
-## Chrome 商店状态：审核中（In Review）
+## Chrome 商店状态：已上架 ✅
 
-本扩展目前正在提交 Chrome Web Store 审核中，暂未正式上架。  
-在上架前，你可以通过本仓库源码手动安装使用（下方有详细教程）。
+你可以直接从 Chrome 网上应用商店下载安装本扩展，这是最便捷、安全的官方安装方式：
+> 📦 [Chrome 网上应用商店 - GMGN 同名首发过滤器](https://chromewebstore.google.com/detail/gmgn-same-name-first-laun/nipccajfbdodfpbnnjaohckbjgiaodkk?authuser=0&hl=zh-CN)
+
+如果无法访问 Chrome 网上应用商店，你也可以通过本仓库源码手动安装（下方有对应教程）。
 
 ---
 
@@ -51,46 +53,46 @@
 
 ---
 
-## 安装（GitHub 手动安装）
+## 安装方式
 
-由于扩展仍在 Chrome 商店审核中，请按以下步骤手动安装。
+### ✅ 推荐：Chrome 网上应用商店安装
+直接点击上方的应用商店链接，进入页面后点击「添加至 Chrome」即可完成安装，后续可自动接收扩展更新。
 
-### 方式 A：使用 git clone
+### 📦 备选：GitHub 手动安装
+如果你无法访问 Chrome 网上应用商店，可以通过源码手动安装：
 
+#### 方式 A：使用 git clone
 1. 克隆仓库到本地  
    ```bash
    git clone https://github.com/wfce/gmgn-filter.git
    ```
 
-2. 进入项目目录（确认这里包含 manifest.json）  
+2. 进入项目目录（确认该目录下包含 `manifest.json`）  
    ```bash
-   cd gmgn-filter-main
+   cd gmgn-filter
    ```
 
-### 方式 B：下载 ZIP
-
+#### 方式 B：下载 ZIP
 1. 打开本仓库页面，点击右上角 **Code → Download ZIP**  
 2. 解压到本地任意目录  
 3. 确保解压后的扩展根目录内包含 `manifest.json`
 
 ---
 
-## 在 Chrome 中加载扩展（开发者模式）
-
-1. 打开 Chrome，进入：  
+## 在 Chrome 中加载手动安装的扩展（开发者模式）
+仅针对上述手动获取源码的安装场景：
+1. 打开 Chrome，进入扩展管理页面：  
    `chrome://extensions/`
 
-2. 打开右上角：  
-   **Developer mode（开发者模式）**
+2. 开启右上角的 **Developer mode（开发者模式）**
 
-3. 点击：  
-   **Load unpacked（加载已解压的扩展程序）**
+3. 点击 **Load unpacked（加载已解压的扩展程序）**
 
 4. 选择扩展根目录（必须是包含 `manifest.json` 的那一层目录）
 
 5. 加载成功后，扩展会出现在扩展列表中
 
-> 提示：如果你选错目录（例如选到了外层或内层），Chrome 会提示找不到 manifest.json。请重新选择正确目录。
+> 提示：如果 Chrome 提示找不到 manifest.json，说明目录选择错误，请重新选择包含该文件的根目录。
 
 ---
 
