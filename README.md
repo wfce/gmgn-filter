@@ -36,7 +36,7 @@
 ### 1）下载源码
 
 方式 A：git clone  
-git clone https://github.com/<YOUR_GITHUB_USERNAME>/<YOUR_REPO_NAME>.git
+git clone https://github.com/wfce/gmgn-filter.git
 
 方式 B：下载 ZIP  
 点击 GitHub 页面右上角 Code → Download ZIP，下载后解压到本地文件夹。
@@ -45,7 +45,7 @@ git clone https://github.com/<YOUR_GITHUB_USERNAME>/<YOUR_REPO_NAME>.git
 
 ### 2）确认目录结构
 
-请确认扩展根目录包含 manifest.json，并且有 icons/ 目录。示例结构：
+请确认扩展根目录包含 manifest.json，示例结构：
 
 extension/
 - manifest.json
