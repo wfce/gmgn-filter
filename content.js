@@ -26,25 +26,20 @@ let cfg = { ...DEFAULTS };
 let currentLang = "en";
 
 // ========== 双缓冲索引系统 ==========
-// 稳定索引 - 只用于渲染，不会被清空
 let renderIndex = new Map();
 let renderDupKeys = new Set();
-
-// 构建索引 - 用于计算，计算完成后才替换 renderIndex
 let buildIndex = new Map();
 let buildDupKeys = new Set();
 
 // ========== 状态锁定系统 ==========
-// 已确认状态的元素 - 短时间内不会改变
-// addrKey -> { isFirst, confirmedAt, keys }
 let confirmedStates = new Map();
-const STATE_LOCK_DURATION = 2000; // 状态锁定 2 秒
+const STATE_LOCK_DURATION = 2000;
 
-// 元素 DOM 缓存
+// ========== 缓存 ==========
 let elementStateCache = new WeakMap();
 let knownAddresses = new Set();
 
-// 处理控制
+// ========== 处理控制 ==========
 let isProcessing = false;
 let pendingScan = false;
 let scanGeneration = 0;
@@ -196,18 +191,43 @@ function inWindowByAge(ageMs) {
   return ageMs != null && ageMs <= cfg.windowMinutes * 60e3;
 }
 
+/**
+ * 获取首发代币信息 - 关键函数，用于"打开首发"
+ */
 function getFirstTokenInfo(keys) {
+  // 优先使用 renderIndex（稳定的渲染索引）
   for (const k of keys) {
     const rec = renderIndex.get(k);
     if (rec) {
-      return { chain: rec.firstChain, address: rec.firstAddr.split(":")[1] };
+      return { 
+        chain: rec.firstChain, 
+        address: rec.firstAddr.split(":")[1],
+        ageMs: rec.firstAgeMs
+      };
     }
   }
+  
+  // 如果 renderIndex 没有，尝试 buildIndex（新计算的索引）
+  for (const k of keys) {
+    const rec = buildIndex.get(k);
+    if (rec) {
+      return { 
+        chain: rec.firstChain, 
+        address: rec.firstAddr.split(":")[1],
+        ageMs: rec.firstAgeMs
+      };
+    }
+  }
+  
   return null;
 }
 
+/**
+ * 跳转到首发代币页面
+ */
 function gotoFirstToken(chain, address) {
-  window.open(`https://gmgn.ai/${chain}/token/${address}`, "_blank");
+  const url = `https://gmgn.ai/${chain}/token/${address}`;
+  window.open(url, "_blank");
 }
 
 function isEarlierThan(tokenAgeMs, tokenSlotIndex, recAgeMs, recSlotIndex) {
@@ -218,6 +238,9 @@ function isEarlierThan(tokenAgeMs, tokenSlotIndex, recAgeMs, recSlotIndex) {
 
 // ========== 标记管理 ==========
 
+/**
+ * 创建标记容器 - 包含"打开首发"按钮
+ */
 function createMarkerContainer(isFirst, keys) {
   const container = document.createElement("div");
   container.className = "gmgn-marker-container";
@@ -234,26 +257,39 @@ function createMarkerContainer(isFirst, keys) {
   container.appendChild(tag);
 
   if (isFirst) {
+    // 首发：显示侧边栏
     const sideBar = document.createElement("div");
     sideBar.className = "gmgn-side-bar";
     container.appendChild(sideBar);
   } else {
+    // 非首发：显示"打开首发"按钮
     const firstInfo = getFirstTokenInfo(keys);
     if (firstInfo) {
       const gotoBtn = document.createElement("button");
       gotoBtn.className = "gmgn-goto-first-btn";
       gotoBtn.type = "button";
       gotoBtn.textContent = t("gotoFirst");
+      
+      // 存储首发信息到按钮属性
       gotoBtn.setAttribute("data-first-chain", firstInfo.chain);
       gotoBtn.setAttribute("data-first-address", firstInfo.address);
+      
+      // 可选：添加 title 显示首发地址
+      gotoBtn.title = `${t("gotoFirst")}: ${firstInfo.chain}/${firstInfo.address.slice(0, 8)}...`;
+      
+      // 点击事件
       gotoBtn.addEventListener("click", (e) => {
         e.preventDefault();
         e.stopPropagation();
-        gotoFirstToken(
-          gotoBtn.getAttribute("data-first-chain"),
-          gotoBtn.getAttribute("data-first-address")
-        );
+        
+        const chain = gotoBtn.getAttribute("data-first-chain");
+        const address = gotoBtn.getAttribute("data-first-address");
+        
+        if (chain && address) {
+          gotoFirstToken(chain, address);
+        }
       });
+
       container.appendChild(gotoBtn);
     }
   }
@@ -261,36 +297,45 @@ function createMarkerContainer(isFirst, keys) {
   return container;
 }
 
+/**
+ * 更新标记 - 智能判断是否需要更新
+ */
 function updateMarker(rowEl, isFirst, keys, addrKey) {
   const cached = elementStateCache.get(rowEl);
   const newType = isFirst ? "first" : "dup";
   const firstInfo = isFirst ? null : getFirstTokenInfo(keys);
   const firstInfoKey = firstInfo ? `${firstInfo.chain}:${firstInfo.address}` : "";
   
-  // 完全相同则跳过
+  // 检查是否需要更新
   if (cached && 
       cached.type === newType && 
       cached.lang === currentLang &&
       cached.firstInfoKey === firstInfoKey) {
-    return false;
+    return false; // 无需更新
   }
 
+  // 移除旧标记
   const existing = rowEl.querySelector(".gmgn-marker-container");
   if (existing) existing.remove();
 
+  // 创建新标记
   const container = createMarkerContainer(isFirst, keys);
 
+  // 确保父元素有 position
   if (window.getComputedStyle(rowEl).position === "static") {
     rowEl.style.position = "relative";
   }
 
+  // 添加新标记
   rowEl.appendChild(container);
 
+  // 更新缓存
   elementStateCache.set(rowEl, {
     type: newType,
     lang: currentLang,
     firstInfoKey,
-    addrKey
+    addrKey,
+    timestamp: Date.now()
   });
 
   return true;
@@ -316,7 +361,7 @@ function getLockedState(addrKey) {
   const state = confirmedStates.get(addrKey);
   if (!state) return null;
   if ((Date.now() - state.confirmedAt) >= STATE_LOCK_DURATION) {
-    return null; // 已过期
+    return null;
   }
   return state;
 }
@@ -364,9 +409,6 @@ function collectTokens(body) {
   return tokens;
 }
 
-/**
- * 在 buildIndex 中计算首发状态（不影响 renderIndex）
- */
 function computeFirstIndex(tokens) {
   buildIndex.clear();
   buildDupKeys.clear();
@@ -393,9 +435,6 @@ function computeFirstIndex(tokens) {
   }
 }
 
-/**
- * 判断 token 在指定索引中是否为首发
- */
 function isTokenFirstInIndex(addrKey, keys, index) {
   for (const k of keys) {
     const rec = index.get(k);
@@ -406,47 +445,31 @@ function isTokenFirstInIndex(addrKey, keys, index) {
   return true;
 }
 
-/**
- * 验证新计算的状态与锁定状态是否一致
- */
 function validateStateChange(addrKey, keys, newIsFirst) {
   const locked = getLockedState(addrKey);
-  if (!locked) return true; // 无锁定，允许任何状态
+  if (!locked) return true;
   
-  // 如果新状态与锁定状态相同，允许
   if (locked.isFirst === newIsFirst) return true;
   
-  // 状态变化，但仍在锁定期内 - 需要验证
-  // 只有当新数据明确推翻旧状态时才允许变化
-  // 例如：发现了更早创建的同名代币
-  
-  // 对于 "首发 -> 非首发" 的变化：需要确认确实有更早的代币
   if (locked.isFirst && !newIsFirst) {
     for (const k of keys) {
       const rec = buildIndex.get(k);
       if (rec && rec.firstAddr !== addrKey) {
-        // 确认有不同地址的记录，允许变化
         return true;
       }
     }
-    // 没有充分证据，拒绝变化
     return false;
   }
   
-  // 对于 "非首发 -> 首发" 的变化：比较少见，可能是旧首发消失
-  // 这种变化相对安全，允许
   return true;
 }
 
-/**
- * 应用标记 - 带状态锁定保护
- */
 function applyMarkersWithLock(tokens) {
   let needsRelayout = false;
   const newKnownAddresses = new Set();
-  const stateChanges = []; // 收集需要变更的状态
+  const stateChanges = [];
 
-  // 第一遍：计算新状态，收集变更
+  // 第一遍：计算状态
   for (const { slot, rowEl, addrKey, keys, canCompare, isNew } of tokens) {
     newKnownAddresses.add(addrKey);
 
@@ -455,37 +478,30 @@ function applyMarkersWithLock(tokens) {
       isFirst = isTokenFirstInIndex(addrKey, keys, buildIndex);
     }
 
-    // 新元素：直接使用计算状态
     if (isNew) {
       stateChanges.push({ slot, rowEl, addrKey, keys, isFirst, isNew: true });
       continue;
     }
 
-    // 已有元素：检查状态锁定
     const locked = getLockedState(addrKey);
     
     if (locked) {
-      // 有锁定状态
       if (locked.isFirst === isFirst) {
-        // 状态一致，延续锁定
         stateChanges.push({ slot, rowEl, addrKey, keys, isFirst, isNew: false });
       } else {
-        // 状态不一致，验证变化是否合理
         if (validateStateChange(addrKey, keys, isFirst)) {
           stateChanges.push({ slot, rowEl, addrKey, keys, isFirst, isNew: false });
         } else {
-          // 拒绝变化，使用锁定状态
           stateChanges.push({ slot, rowEl, addrKey, keys: locked.keys, isFirst: locked.isFirst, isNew: false });
         }
       }
     } else {
-      // 无锁定，使用计算状态
       stateChanges.push({ slot, rowEl, addrKey, keys, isFirst, isNew: false });
     }
   }
 
-  // 第二遍：批量应用变更
-  for (const { slot, rowEl, addrKey, keys, isFirst, isNew } of stateChanges) {
+  // 第二遍：应用变更
+  for (const { slot, rowEl, addrKey, keys, isFirst } of stateChanges) {
     const shouldHide = shouldHideSlot(isFirst, keys);
     
     if (shouldHide) {
@@ -502,7 +518,6 @@ function applyMarkersWithLock(tokens) {
       updateMarker(rowEl, isFirst, keys, addrKey);
     }
 
-    // 锁定状态
     lockState(addrKey, isFirst, keys);
   }
 
@@ -555,16 +570,11 @@ function relayoutBody(body) {
 function scanBody(body, generation) {
   if (generation !== scanGeneration) return;
 
-  // 1. 收集所有 token
   const tokens = collectTokens(body);
-  
-  // 2. 在 buildIndex 中计算首发状态
   computeFirstIndex(tokens);
-  
-  // 3. 应用标记（带锁定保护）
   const needsRelayout = applyMarkersWithLock(tokens);
   
-  // 4. 提交：将 buildIndex 复制到 renderIndex
+  // 提交新索引到渲染索引
   renderIndex = new Map(buildIndex);
   renderDupKeys = new Set(buildDupKeys);
 
@@ -589,7 +599,6 @@ function scanAllColumns() {
     try {
       document.querySelectorAll(".g-table-body").forEach((body) => scanBody(body, gen));
       
-      // 定期清理过期状态
       if (Math.random() < 0.1) {
         cleanExpiredStates();
       }
@@ -673,7 +682,6 @@ function onMutation() {
   mutationBatch++;
   clearTimeout(mutationTimer);
   
-  // 批量变更时稍微延迟
   const delay = mutationBatch > 3 ? 120 : 40;
   mutationTimer = setTimeout(() => {
     mutationBatch = 0;
