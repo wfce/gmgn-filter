@@ -3,10 +3,9 @@ const DEFAULTS = {
   matchMode: "either",
   showMode: "all",
   onlyWithinWindow: true,
-  language: "auto" // auto, en, zh
+  language: "auto"
 };
 
-// 多语言文本
 const i18n = {
   en: {
     firstLaunch: "First",
@@ -24,11 +23,15 @@ let cfg = { ...DEFAULTS };
 let currentLang = "en";
 
 // key -> { firstAddr, firstAgeMs, firstSlotIndex, firstChain }
-// 优先按 ageMs 判断（越大越早），同秒时按 slotIndex 判断（越大越早）
 let firstIndex = new Map();
 let dupKeys = new Set();
+// 改进的缓存结构：addrKey -> { isFirst, markerType, lang, firstInfo }
 let processedCache = new Map();
 let hiddenSlots = new Map();
+
+// 防抖/节流控制
+let isProcessing = false;
+let pendingScan = false;
 
 function detectLanguage() {
   const browserLang = navigator.language || navigator.userLanguage || "en";
@@ -120,8 +123,6 @@ function extractTokenFromRow(rowEl, slot) {
   const ageText = extractAge(rowEl);
   const ageMs = parseAgeToMs(ageText);
   const { symbol, name } = extractSymbolAndName(rowEl);
-  
-  // 获取 slot 的 data-index 作为次级排序依据
   const slotIndex = parseInt(slot?.getAttribute("data-index") || "0", 10);
 
   return {
@@ -152,30 +153,19 @@ function getFirstTokenInfo(keys) {
   return null;
 }
 
-/** 直接跳转到首发 token 页面 */
 function gotoFirstToken(chain, address) {
   const url = `https://gmgn.ai/${chain}/token/${address}`;
   window.open(url, "_blank");
 }
 
-/**
- * 比较两个 token 谁更早（首发）
- * 返回 true 表示 tokenA 比 tokenB 更早
- * 优先比较 ageMs（越大越早），同秒时比较 slotIndex（越大越早）
- */
 function isEarlierThan(tokenAgeMs, tokenSlotIndex, recAgeMs, recSlotIndex) {
-  // ageMs 越大表示越早创建
   if (tokenAgeMs > recAgeMs) return true;
   if (tokenAgeMs < recAgeMs) return false;
-  
-  // ageMs 相同（同一秒），用 slotIndex 判断，越大越早
   return tokenSlotIndex > recSlotIndex;
 }
 
 /**
- * 创建标记容器
- * - container pointer-events:none，不影响行点击
- * - button pointer-events:auto，按钮可点
+ * 创建或更新标记 - 优化版本，减少 DOM 操作
  */
 function createMarkerContainer(isFirst, keys) {
   const container = document.createElement("div");
@@ -206,10 +196,8 @@ function createMarkerContainer(isFirst, keys) {
       gotoBtn.setAttribute("data-first-address", firstInfo.address);
 
       gotoBtn.addEventListener("click", (e) => {
-        // 关键：不触发行点击
         e.preventDefault();
         e.stopPropagation();
-
         const chain = gotoBtn.getAttribute("data-first-chain");
         const address = gotoBtn.getAttribute("data-first-address");
         gotoFirstToken(chain, address);
@@ -222,24 +210,52 @@ function createMarkerContainer(isFirst, keys) {
   return container;
 }
 
-function updateMarker(rowEl, isFirst, keys) {
-  let container = rowEl.querySelector(".gmgn-marker-container");
-  const currentType = container?.getAttribute("data-type");
-  const currentLangAttr = container?.getAttribute("data-lang");
+/**
+ * 智能更新标记 - 只在必要时操作 DOM
+ */
+function updateMarker(rowEl, isFirst, keys, addrKey) {
+  const container = rowEl.querySelector(".gmgn-marker-container");
   const newType = isFirst ? "first" : "dup";
+  const firstInfo = isFirst ? null : getFirstTokenInfo(keys);
+  const firstInfoKey = firstInfo ? `${firstInfo.chain}:${firstInfo.address}` : "";
+  
+  // 检查缓存，判断是否需要更新
+  const cached = processedCache.get(addrKey);
+  if (cached && 
+      cached.markerType === newType && 
+      cached.lang === currentLang &&
+      cached.firstInfoKey === firstInfoKey &&
+      container) {
+    // 状态完全相同，无需更新
+    return false;
+  }
 
-  if (container && currentType === newType && currentLangAttr === currentLang) return;
+  // 需要更新
+  if (container) {
+    container.remove();
+  }
 
-  if (container) container.remove();
-
-  container = createMarkerContainer(isFirst, keys);
-  container.setAttribute("data-type", newType);
-  container.setAttribute("data-lang", currentLang);
+  const newContainer = createMarkerContainer(isFirst, keys);
+  newContainer.setAttribute("data-type", newType);
+  newContainer.setAttribute("data-lang", currentLang);
 
   const computedStyle = window.getComputedStyle(rowEl);
-  if (computedStyle.position === "static") rowEl.style.position = "relative";
+  if (computedStyle.position === "static") {
+    rowEl.style.position = "relative";
+  }
 
-  rowEl.appendChild(container);
+  rowEl.appendChild(newContainer);
+
+  // 更新缓存
+  processedCache.set(addrKey, {
+    isFirst,
+    markerType: newType,
+    lang: currentLang,
+    firstInfoKey,
+    timestamp: Date.now()
+  });
+
+  return true;
 }
 
 function removeMarker(rowEl) {
@@ -279,7 +295,9 @@ function relayoutBody(body) {
   }
 
   const innerContainer = body.querySelector('div[style*="height"]');
-  if (innerContainer && visibleTop > 0) innerContainer.style.height = `${visibleTop}px`;
+  if (innerContainer && visibleTop > 0) {
+    innerContainer.style.height = `${visibleTop}px`;
+  }
 }
 
 function shouldHideSlot(isFirst, keys) {
@@ -299,37 +317,57 @@ function shouldHideSlot(isFirst, keys) {
   }
 }
 
-function processSlot(slot, body) {
-  const rowEl = slot.querySelector('div[href^="/"][href*="/token/"]');
-  if (!rowEl) return { processed: false };
+/**
+ * 第一遍：收集所有 token 信息并建立首发索引
+ */
+function collectTokens(body) {
+  const slots = body.querySelectorAll("div[data-index]");
+  const tokens = [];
 
-  const token = extractTokenFromRow(rowEl, slot);
-  if (!token) {
-    removeMarker(rowEl);
-    slot.classList.remove("gmgn-slot-hidden");
-    return { processed: false };
+  for (const slot of slots) {
+    const rowEl = slot.querySelector('div[href^="/"][href*="/token/"]');
+    if (!rowEl) continue;
+
+    const token = extractTokenFromRow(rowEl, slot);
+    if (!token) continue;
+
+    const addrKey = `${token.chain}:${token.address}`;
+    const keys = buildKeys(token);
+    if (!keys.length) continue;
+
+    const canCompare = token.ageMs != null && (!cfg.onlyWithinWindow || inWindowByAge(token.ageMs));
+
+    tokens.push({
+      slot,
+      rowEl,
+      token,
+      addrKey,
+      keys,
+      canCompare
+    });
   }
 
-  const addrKey = `${token.chain}:${token.address}`;
-  const keys = buildKeys(token);
+  return tokens;
+}
 
-  if (!keys.length) {
-    removeMarker(rowEl);
-    slot.classList.remove("gmgn-slot-hidden");
-    return { processed: false };
-  }
+/**
+ * 建立首发索引
+ */
+function buildFirstIndex(tokens) {
+  // 清空当前索引
+  firstIndex.clear();
+  dupKeys.clear();
 
-  // 判断是否在时间窗口内
-  const canCompare = token.ageMs != null && (!cfg.onlyWithinWindow || inWindowByAge(token.ageMs));
-  let isFirst = true;
+  for (const { token, addrKey, keys, canCompare } of tokens) {
+    if (!canCompare) continue;
 
-  if (canCompare) {
     for (const k of keys) {
       const rec = firstIndex.get(k);
 
-      if (rec && rec.firstAddr !== addrKey) dupKeys.add(k);
+      if (rec && rec.firstAddr !== addrKey) {
+        dupKeys.add(k);
+      }
 
-      // 优先按 ageMs 判断，同秒时按 slotIndex 判断
       if (!rec || isEarlierThan(token.ageMs, token.slotIndex, rec.firstAgeMs, rec.firstSlotIndex)) {
         firstIndex.set(k, {
           firstAddr: addrKey,
@@ -339,73 +377,95 @@ function processSlot(slot, body) {
         });
       }
     }
-
-    for (const k of keys) {
-      const rec = firstIndex.get(k);
-      if (rec && rec.firstAddr !== addrKey) {
-        isFirst = false;
-        break;
-      }
-    }
   }
-
-  const shouldHide = shouldHideSlot(isFirst, keys);
-  if (shouldHide) {
-    slot.classList.add("gmgn-slot-hidden");
-    removeMarker(rowEl);
-    return { processed: true, hidden: true };
-  }
-
-  slot.classList.remove("gmgn-slot-hidden");
-
-  const cached = processedCache.get(addrKey);
-  if (cached && cached.isFirst === isFirst && cached.rowEl === rowEl && cached.lang === currentLang) {
-    return { processed: true, hidden: false };
-  }
-
-  processedCache.set(addrKey, { isFirst, rowEl, timestamp: Date.now(), lang: currentLang });
-
-  updateMarker(rowEl, isFirst, keys);
-  return { processed: true, hidden: false };
 }
 
-function scanBody(body) {
-  const scrollTop = body.scrollTop || 0;
-  const viewH = body.clientHeight || 0;
-  const PAD = 800;
-
-  const slots = body.querySelectorAll("div[data-index]");
+/**
+ * 第二遍：应用标记
+ */
+function applyMarkers(tokens) {
   let needsRelayout = false;
 
-  for (const slot of slots) {
-    const originalTop = parseFloat(slot.getAttribute("data-original-top") || slot.style.top || "0");
+  for (const { slot, rowEl, addrKey, keys, canCompare } of tokens) {
+    let isFirst = true;
 
-    if (!slot.hasAttribute("data-original-top")) {
-      slot.setAttribute("data-original-top", slot.style.top || "0");
+    if (canCompare) {
+      for (const k of keys) {
+        const rec = firstIndex.get(k);
+        if (rec && rec.firstAddr !== addrKey) {
+          isFirst = false;
+          break;
+        }
+      }
     }
 
-    const h = 144;
-    const bottom = originalTop + h;
-
-    if (bottom < scrollTop - PAD * 2) continue;
-    if (originalTop > scrollTop + viewH + PAD * 2) continue;
-
-    const result = processSlot(slot, body);
-    if (result.hidden) needsRelayout = true;
+    const shouldHide = shouldHideSlot(isFirst, keys);
+    
+    if (shouldHide) {
+      if (!slot.classList.contains("gmgn-slot-hidden")) {
+        slot.classList.add("gmgn-slot-hidden");
+        needsRelayout = true;
+      }
+      removeMarker(rowEl);
+    } else {
+      if (slot.classList.contains("gmgn-slot-hidden")) {
+        slot.classList.remove("gmgn-slot-hidden");
+        needsRelayout = true;
+      }
+      updateMarker(rowEl, isFirst, keys, addrKey);
+    }
   }
 
-  if (needsRelayout || cfg.showMode !== "all") relayoutBody(body);
+  return needsRelayout;
+}
+
+/**
+ * 优化后的扫描逻辑 - 两遍扫描避免闪烁
+ */
+function scanBody(body) {
+  // 第一遍：收集所有 token
+  const tokens = collectTokens(body);
+  
+  // 建立首发索引
+  buildFirstIndex(tokens);
+  
+  // 第二遍：应用标记
+  const needsRelayout = applyMarkers(tokens);
+
+  if (needsRelayout || cfg.showMode !== "all") {
+    relayoutBody(body);
+  }
 }
 
 function scanAllColumns() {
-  document.querySelectorAll(".g-table-body").forEach((body) => scanBody(body));
+  if (isProcessing) {
+    pendingScan = true;
+    return;
+  }
+
+  isProcessing = true;
+
+  // 使用 requestAnimationFrame 确保在渲染帧内完成
+  requestAnimationFrame(() => {
+    try {
+      document.querySelectorAll(".g-table-body").forEach((body) => scanBody(body));
+    } finally {
+      isProcessing = false;
+      
+      // 如果有待处理的扫描请求，延迟执行
+      if (pendingScan) {
+        pendingScan = false;
+        setTimeout(scheduleScan, 100);
+      }
+    }
+  });
 }
 
 function resetAll() {
-  firstIndex = new Map();
-  dupKeys = new Set();
-  processedCache = new Map();
-  hiddenSlots = new Map();
+  firstIndex.clear();
+  dupKeys.clear();
+  processedCache.clear();
+  hiddenSlots.clear();
 
   document.querySelectorAll(".gmgn-marker-container").forEach((el) => el.remove());
 
@@ -418,7 +478,9 @@ function resetAll() {
     slot.style.pointerEvents = "";
   });
 
-  document.querySelectorAll("[data-original-top]").forEach((el) => el.removeAttribute("data-original-top"));
+  document.querySelectorAll("[data-original-top]").forEach((el) => {
+    el.removeAttribute("data-original-top");
+  });
 }
 
 async function loadCfg() {
@@ -427,10 +489,10 @@ async function loadCfg() {
   currentLang = getCurrentLang();
 }
 
-/* ===================== 扫描调度器 ===================== */
+/* ===================== 扫描调度器 - 优化版 ===================== */
 let scanScheduled = false;
 let lastScanTime = 0;
-const MIN_INTERVAL = 150;
+const MIN_INTERVAL = 200; // 增加最小间隔，减少扫描频率
 
 function scheduleScan() {
   if (scanScheduled) return;
@@ -457,10 +519,18 @@ function scheduleScan() {
   }
 }
 
+// 滚动防抖 - 增加延迟
 let scrollTimer = null;
 function onScroll(e) {
   clearTimeout(scrollTimer);
-  scrollTimer = setTimeout(() => scheduleScan(), 50);
+  scrollTimer = setTimeout(() => scheduleScan(), 100);
+}
+
+// MutationObserver 防抖
+let mutationTimer = null;
+function onMutation() {
+  clearTimeout(mutationTimer);
+  mutationTimer = setTimeout(() => scheduleScan(), 150);
 }
 
 function initObserver() {
@@ -471,15 +541,19 @@ function initObserver() {
     let hasRelevantChange = false;
 
     for (const mutation of mutations) {
+      // 跳过我们自己的标记元素
       if (mutation.target.closest?.(".gmgn-marker-container")) continue;
       if (mutation.target.classList?.contains("gmgn-marker-container")) continue;
 
       if (mutation.type === "childList") {
         let isOurElement = false;
         for (const node of [...mutation.addedNodes, ...mutation.removedNodes]) {
-          if (node.nodeType === 1 && node.classList?.contains("gmgn-marker-container")) {
-            isOurElement = true;
-            break;
+          if (node.nodeType === 1) {
+            if (node.classList?.contains("gmgn-marker-container") ||
+                node.querySelector?.(".gmgn-marker-container")) {
+              isOurElement = true;
+              break;
+            }
           }
         }
         if (!isOurElement) {
@@ -489,7 +563,9 @@ function initObserver() {
       }
     }
 
-    if (hasRelevantChange) scheduleScan();
+    if (hasRelevantChange) {
+      onMutation();
+    }
   });
 
   bodies.forEach((b) => {
@@ -497,8 +573,9 @@ function initObserver() {
     b.addEventListener("scroll", onScroll, { passive: true });
   });
 
-  window.addEventListener("resize", scheduleScan, { passive: true });
+  window.addEventListener("resize", () => scheduleScan(), { passive: true });
 
+  // 初始扫描
   setTimeout(scanAllColumns, 100);
 }
 
