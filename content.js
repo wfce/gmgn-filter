@@ -1,7 +1,7 @@
 const DEFAULTS = {
   enabled: true,
   windowMinutes: 120,
-  matchMode: "either",
+  matchMode: "symbol",
   showMode: "all",
   onlyWithinWindow: true,
   language: "auto"
@@ -768,4 +768,5 @@ function initObserver() {
       scheduleScan();
     }
   }, 1000);
+
 })();
