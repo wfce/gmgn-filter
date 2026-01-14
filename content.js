@@ -1,4 +1,5 @@
 const DEFAULTS = {
+  enabled: true,
   windowMinutes: 120,
   matchMode: "either",
   showMode: "all",
@@ -87,36 +88,170 @@ function buildKeys({ symbol, name }) {
   return keys;
 }
 
+/**
+ * 适配新页面结构的 Symbol 和 Name 提取
+ */
 function extractSymbolAndName(rowEl) {
-  const symbolEl = rowEl.querySelector("span.whitespace-nowrap.font-medium");
-  const symbol = (symbolEl?.textContent || "").trim();
-
+  let symbol = "";
   let name = "";
-  const nameEl = rowEl.querySelector("div.text-text-300.font-medium");
-  if (nameEl) name = (nameEl.textContent || "").trim();
+
+  // 尝试多种选择器来获取 Symbol
+  // 方式1: span.whitespace-nowrap.font-medium (原有)
+  let symbolEl = rowEl.querySelector("span.whitespace-nowrap.font-medium");
+  if (symbolEl) {
+    symbol = (symbolEl.textContent || "").trim();
+  }
+
+  // 方式2: 查找包含 token symbol 的元素（新结构）
+  if (!symbol) {
+    // 在新结构中，symbol 通常在第一个 font-medium 的 span 中
+    const symbolCandidates = rowEl.querySelectorAll('span.font-medium[class*="text-[16px]"]');
+    for (const el of symbolCandidates) {
+      const text = (el.textContent || "").trim();
+      if (text && text.length < 20) { // symbol 通常比较短
+        symbol = text;
+        break;
+      }
+    }
+  }
+
+  // 方式3: 查找第一个 text-[16px] font-medium
+  if (!symbol) {
+    const el = rowEl.querySelector('[class*="text-[16px]"][class*="font-medium"]');
+    if (el) {
+      symbol = (el.textContent || "").trim();
+    }
+  }
+
+  // 尝试多种选择器来获取 Name
+  // 方式1: div.text-text-300.font-medium (原有)
+  let nameEl = rowEl.querySelector("div.text-text-300.font-medium");
+  if (nameEl) {
+    name = (nameEl.textContent || "").trim();
+  }
+
+  // 方式2: 查找包含 name 的元素（新结构）
+  if (!name) {
+    // 在新结构中，name 通常在 text-text-300 的 div 中，且在 symbol 后面
+    const nameCandidates = rowEl.querySelectorAll('div[class*="text-text-300"]');
+    for (const el of nameCandidates) {
+      const text = (el.textContent || "").trim();
+      // 排除太短的文本和纯数字/符号
+      if (text && text.length > 1 && text !== symbol && !/^[\d.%]+$/.test(text)) {
+        name = text;
+        break;
+      }
+    }
+  }
+
+  // 方式3: 查找 truncate 类的元素
+  if (!name) {
+    const el = rowEl.querySelector('[class*="truncate"][class*="text-[14px]"]');
+    if (el) {
+      name = (el.textContent || "").trim();
+    }
+  }
 
   return { symbol, name };
 }
 
+/**
+ * 适配新页面结构的 Age 提取
+ */
 function extractAge(rowEl) {
-  const ageEl = rowEl.querySelector(
-    '.text-green-50, .text-green-100, [class*="text-green-50"], [class*="text-green-100"]'
-  );
-  if (ageEl) {
-    const text = (ageEl.textContent || "").trim();
-    if (/^\d+\s*[smhd]$/i.test(text)) return text;
+  // 方式1: 查找 text-green-50 或 text-green-100 类（原有）
+  const ageSelectors = [
+    '.text-green-50',
+    '.text-green-100',
+    '[class*="text-green-50"]',
+    '[class*="text-green-100"]',
+    'div.text-green-50',
+    'div.text-green-100'
+  ];
+
+  for (const selector of ageSelectors) {
+    const ageEl = rowEl.querySelector(selector);
+    if (ageEl) {
+      const text = (ageEl.textContent || "").trim();
+      if (/^\d+\s*[smhd]$/i.test(text)) {
+        return text;
+      }
+    }
   }
 
+  // 方式2: 遍历所有可能包含时间的元素
   const candidates = rowEl.querySelectorAll("div, span, p");
   for (const el of candidates) {
     const txt = (el.textContent || "").trim();
-    if (/^\d+\s*[smhd]$/i.test(txt)) return txt;
+    // 匹配 "33s", "42s", "1m", "2h" 等格式
+    if (/^\d+\s*[smhd]$/i.test(txt)) {
+      return txt;
+    }
   }
+
   return null;
 }
 
+/**
+ * 获取行元素 - 适配新结构
+ */
+function getRowElement(slot) {
+  // 方式1: 原有选择器
+  let rowEl = slot.querySelector('div[href^="/"][href*="/token/"]');
+  
+  // 方式2: 新结构 - 查找具有 href 属性的 div
+  if (!rowEl) {
+    rowEl = slot.querySelector('div[href*="/token/"]');
+  }
+
+  // 方式3: 查找 class 包含 cursor-pointer 且有 href 的 div
+  if (!rowEl) {
+    const candidates = slot.querySelectorAll('div[href]');
+    for (const el of candidates) {
+      const href = el.getAttribute("href") || "";
+      if (href.includes("/token/")) {
+        rowEl = el;
+        break;
+      }
+    }
+  }
+
+  // 方式4: 查找最外层的可点击行元素
+  if (!rowEl) {
+    rowEl = slot.querySelector('div[class*="cursor-pointer"][class*="group/a"]');
+    // 如果找到，检查是否能从子元素获取 href
+    if (rowEl) {
+      const linkEl = rowEl.querySelector('a[href*="/token/"]');
+      if (linkEl) {
+        // 将 href 设置到 rowEl 的数据属性中供后续使用
+        rowEl.setAttribute('data-token-href', linkEl.getAttribute('href'));
+      }
+    }
+  }
+
+  return rowEl;
+}
+
+/**
+ * 从行元素提取 token 信息
+ */
 function extractTokenFromRow(rowEl, slot) {
-  const href = rowEl.getAttribute("href") || "";
+  // 尝试多种方式获取 href
+  let href = rowEl.getAttribute("href") || "";
+  
+  // 如果没有 href，尝试从 data 属性获取
+  if (!href) {
+    href = rowEl.getAttribute("data-token-href") || "";
+  }
+  
+  // 如果还是没有，尝试从子元素的 a 标签获取
+  if (!href) {
+    const linkEl = rowEl.querySelector('a[href*="/token/"]');
+    if (linkEl) {
+      href = linkEl.getAttribute("href") || "";
+    }
+  }
+
   const parsed = parseTokenHref(href);
   if (!parsed) return null;
 
@@ -267,7 +402,8 @@ function relayoutBody(body) {
   const slots = Array.from(body.querySelectorAll("div[data-index]"));
   if (!slots.length) return;
 
-  const slotHeight = 124;
+  const slotHeight = 144; // 根据新结构调整高度
+
   let visibleTop = 0;
 
   slots.sort((a, b) => {
@@ -325,7 +461,7 @@ function collectTokens(body) {
   const tokens = [];
 
   for (const slot of slots) {
-    const rowEl = slot.querySelector('div[href^="/"][href*="/token/"]');
+    const rowEl = getRowElement(slot);
     if (!rowEl) continue;
 
     const token = extractTokenFromRow(rowEl, slot);
@@ -438,6 +574,9 @@ function scanBody(body) {
 }
 
 function scanAllColumns() {
+  // 如果插件被禁用，不执行扫描
+  if (!cfg.enabled) return;
+  
   if (isProcessing) {
     pendingScan = true;
     return;
@@ -492,9 +631,12 @@ async function loadCfg() {
 /* ===================== 扫描调度器 - 优化版 ===================== */
 let scanScheduled = false;
 let lastScanTime = 0;
-const MIN_INTERVAL = 200; // 增加最小间隔，减少扫描频率
+const MIN_INTERVAL = 200;
 
 function scheduleScan() {
+  // 如果插件被禁用，不调度扫描
+  if (!cfg.enabled) return;
+  
   if (scanScheduled) return;
 
   const now = Date.now();
@@ -519,9 +661,10 @@ function scheduleScan() {
   }
 }
 
-// 滚动防抖 - 增加延迟
+// 滚动防抖
 let scrollTimer = null;
 function onScroll(e) {
+  if (!cfg.enabled) return;
   clearTimeout(scrollTimer);
   scrollTimer = setTimeout(() => scheduleScan(), 100);
 }
@@ -529,6 +672,7 @@ function onScroll(e) {
 // MutationObserver 防抖
 let mutationTimer = null;
 function onMutation() {
+  if (!cfg.enabled) return;
   clearTimeout(mutationTimer);
   mutationTimer = setTimeout(() => scheduleScan(), 150);
 }
@@ -538,6 +682,8 @@ function initObserver() {
   if (!bodies.length) return setTimeout(initObserver, 300);
 
   const mo = new MutationObserver((mutations) => {
+    if (!cfg.enabled) return;
+    
     let hasRelevantChange = false;
 
     for (const mutation of mutations) {
@@ -573,10 +719,14 @@ function initObserver() {
     b.addEventListener("scroll", onScroll, { passive: true });
   });
 
-  window.addEventListener("resize", () => scheduleScan(), { passive: true });
+  window.addEventListener("resize", () => {
+    if (cfg.enabled) scheduleScan();
+  }, { passive: true });
 
-  // 初始扫描
-  setTimeout(scanAllColumns, 100);
+  // 初始扫描（如果启用）
+  if (cfg.enabled) {
+    setTimeout(scanAllColumns, 100);
+  }
 }
 
 (async function init() {
@@ -586,17 +736,36 @@ function initObserver() {
   chrome.storage.onChanged.addListener(async (changes, area) => {
     if (area !== "sync") return;
 
+    const wasEnabled = cfg.enabled;
+    
     if (changes.__gmgn_cmd?.newValue?.type === "reset") {
       await loadCfg();
       resetAll();
-      setTimeout(scanAllColumns, 100);
+      if (cfg.enabled) {
+        setTimeout(scanAllColumns, 100);
+      }
       return;
     }
 
     await loadCfg();
-    resetAll();
-    setTimeout(scanAllColumns, 100);
+    
+    // 如果从启用变为禁用
+    if (wasEnabled && !cfg.enabled) {
+      resetAll();
+      return;
+    }
+    
+    // 如果从禁用变为启用，或者其他设置变更
+    if (cfg.enabled) {
+      resetAll();
+      setTimeout(scanAllColumns, 100);
+    }
   });
 
-  setInterval(scheduleScan, 1000);
+  // 只有在启用时才定期扫描
+  setInterval(() => {
+    if (cfg.enabled) {
+      scheduleScan();
+    }
+  }, 1000);
 })();
