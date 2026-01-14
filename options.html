@@ -106,8 +106,8 @@
   <div class="field">
     <label for="matchMode" id="matchModeLabel">Match Mode</label>
     <select id="matchMode">
-      <option value="either" id="matchEither">Symbol or Name matches</option>
       <option value="symbol" id="matchSymbol">Symbol only</option>
+      <option value="either" id="matchEither">Symbol or Name matches</option>
       <option value="name" id="matchName">Name only</option>
       <option value="both" id="matchBoth">Both Symbol and Name match</option>
     </select>
@@ -117,9 +117,9 @@
     <label for="showMode" id="showModeLabel">Display Mode</label>
     <select id="showMode">
       <option value="all" id="showAll">Show all (mark First/Not First)</option>
-      <option value="onlyFirst" id="showOnlyFirst">Show First only (hide Not First)</option>
-      <option value="onlyDup" id="showOnlyDup">Show Not First only</option>
-      <option value="hideNonSameNameFirst" id="hideNonSameNameFirst">Hide non-duplicate groups</option>
+      <option value="onlyFirst" id="showOnlyFirst" disabled>Show First only (hide Not First)</option>
+      <option value="onlyDup" id="showOnlyDup" disabled>Show Not First only</option>
+      <option value="hideNonSameNameFirst" id="hideNonSameNameFirst" disabled>Hide non-duplicate groups</option>
     </select>
     <div class="hint" id="showModeHint">The oldest token (largest ageMs) is considered First</div>
   </div>
