@@ -1,0 +1,8 @@
+{
+  "extName": {
+    "message": "GMGN 同名首发过滤器"
+  },
+  "extDesc": {
+    "message": "在 gmgn.ai 上标记时间窗口内的首发代币并过滤同名重复项"
+  }
+}
