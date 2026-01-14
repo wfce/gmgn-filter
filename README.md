@@ -5,7 +5,16 @@
 ## Chrome 商店状态：审核中（In Review）
 
 本扩展目前正在提交 Chrome Web Store 审核中，暂未正式上架。  
-在上架前，你可以通过本仓库源码手动安装使用（下面有详细教程）。
+在上架前，你可以通过本仓库源码手动安装使用（下方有详细教程）。
+
+---
+
+## 当前支持的链
+
+目前支持在 gmgn.ai 上识别并跳转以下链的代币页面：
+- BSC
+- SOL
+- ETH
 
 ---
 
@@ -25,29 +34,29 @@
 
 ### 方式 A：使用 git clone
 
-1. 克隆仓库到本地
-   git clone https://github.com/wfce/gmgn-filter.git
+1. 克隆仓库到本地  
+   git clone https://github.com/<YOUR_GITHUB_USERNAME>/<YOUR_REPO_NAME>.git
 
-2. 进入项目目录（确认这里包含 manifest.json）
-   cd gmgn-filter
+2. 进入项目目录（确认这里包含 manifest.json）  
+   cd <YOUR_REPO_NAME>
 
 ### 方式 B：下载 ZIP
 
-1. 打开本仓库页面，点击右上角 Code → Download ZIP
-2. 解压到本地任意目录
+1. 打开本仓库页面，点击右上角 Code → Download ZIP  
+2. 解压到本地任意目录  
 3. 确保解压后的扩展根目录内包含 manifest.json
 
 ---
 
 ## 在 Chrome 中加载扩展（开发者模式）
 
-1. 打开 Chrome，进入：
+1. 打开 Chrome，进入：  
    chrome://extensions/
 
-2. 打开右上角：
+2. 打开右上角：  
    Developer mode（开发者模式）
 
-3. 点击：
+3. 点击：  
    Load unpacked（加载已解压的扩展程序）
 
 4. 选择扩展根目录（必须是包含 manifest.json 的那一层目录）
@@ -60,21 +69,21 @@
 
 ## 如何使用
 
-1. 打开 gmgn.ai：
+1. 打开 gmgn.ai：  
    https://gmgn.ai/
 
-2. 在代币列表/表格中查看标记：
-   - 首发：绿色描边 + “首发/First”
-   - 非首发：灰色遮罩 + “非首发/Not First” + “跳转/Go” 按钮
+2. 在代币列表/表格中查看标记：  
+   - 首发：绿色描边 + “首发/First”  
+   - 非首发：灰色遮罩 + “非首发/Not First” + “跳转/Go” 按钮  
 
-3. 点击非首发行的「跳转」按钮：
+3. 点击非首发行的「跳转」按钮：  
    - 直接打开对应首发代币的 token 页面（新标签页）
 
 ---
 
 ## 设置（Options）
 
-打开设置页：
+打开设置页：  
 1) 进入 chrome://extensions/  
 2) 找到本扩展 → Details（详情）  
 3) Extension options（扩展程序选项）
@@ -108,9 +117,18 @@
 
 ---
 
+## 打赏
+
+如果这个插件对你有用，可以给我打赏，你的支持将会为我提供更新的动力，谢谢。
+
+- BSC 地址：0x5332fffa7b07d90e07c9b024d73c4d60a27d0637  
+- SOL 地址：EtqMax9k5Xj1cqqDqCXPymkG9fUPX9LoDrDEBMoHvGJ
+
+---
+
 ## 开发与调试
 
-修改代码后生效步骤：
+修改代码后生效步骤：  
 1) 打开 chrome://extensions/  
 2) 点击本扩展的 Reload（重新加载）  
 3) 刷新 gmgn.ai 页面
