@@ -1,8 +1,8 @@
 {
   "extName": {
-    "message": "GMGN Same-Name First Launch Filter"
+    "message": "GMGN First Token Sniper"
   },
   "extDesc": {
-    "message": "Mark first-launch token within time window and filter same-name duplicates on gmgn.ai"
+    "message": "Automatically target and purchase launch tokens with the same name on gmgn.ai"
   }
 }

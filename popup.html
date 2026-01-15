@@ -2,7 +2,7 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title id="title">GMGN Filter</title>
+  <title id="title">GMGN Sniper</title>
   <style>
     * {
       margin: 0;
@@ -12,8 +12,8 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       padding: 16px;
-      min-width: 320px;
-      max-width: 320px;
+      min-width: 340px;
+      max-width: 340px;
       background: #1a1a1a;
       color: #e0e0e0;
     }
@@ -77,6 +77,18 @@
     .toggle input:checked + .toggle-slider:before {
       transform: translateX(20px);
     }
+    .section-title {
+      font-size: 13px;
+      font-weight: 600;
+      color: #00ba77;
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .section-title .icon {
+      font-size: 14px;
+    }
     .field {
       margin-bottom: 14px;
     }
@@ -124,6 +136,9 @@
       color: #666;
       margin-top: 3px;
     }
+    .hint.highlight {
+      color: #00ba77;
+    }
     .divider {
       height: 1px;
       background: #333;
@@ -170,11 +185,58 @@
       opacity: 0.5;
       pointer-events: none;
     }
+    .auto-buy-section {
+      background: #252525;
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 14px;
+      border: 1px solid #333;
+    }
+    .auto-buy-section.active {
+      border-color: #f58536;
+      background: #2a2520;
+    }
+    .warning-text {
+      font-size: 10px;
+      color: #f58536;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    .inline-fields {
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .inline-fields .field {
+      flex: 1;
+      margin-bottom: 0;
+    }
+    .stats-bar {
+      display: flex;
+      justify-content: space-between;
+      background: #252525;
+      border-radius: 6px;
+      padding: 8px 12px;
+      margin-bottom: 14px;
+      font-size: 11px;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-value {
+      color: #00ba77;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    .stat-label {
+      color: #888;
+      margin-top: 2px;
+    }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1 id="pageTitle">GMGN Filter</h1>
+    <h1 id="pageTitle">GMGN Sniper</h1>
     <div class="toggle-container">
       <span class="toggle-label" id="enableLabel">Enable</span>
       <label class="toggle">
@@ -185,6 +247,22 @@
   </div>
   
   <div id="settingsContainer">
+    <!-- Stats Bar -->
+    <div class="stats-bar" id="statsBar">
+      <div class="stat-item">
+        <div class="stat-value" id="statAutoBuys">0</div>
+        <div class="stat-label" id="statAutoBuysLabel">Auto Buys</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statDetections">0</div>
+        <div class="stat-label" id="statDetectionsLabel">Detections</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-value" id="statToday">0</div>
+        <div class="stat-label" id="statTodayLabel">Today</div>
+      </div>
+    </div>
+
     <div class="field">
       <label for="language" id="languageLabel">Language</label>
       <select id="language">
@@ -195,6 +273,44 @@
     </div>
     
     <div class="divider"></div>
+    
+    <!-- Auto Buy Section -->
+    <div class="auto-buy-section" id="autoBuySection">
+      <div class="section-title">
+        <span class="icon">⚡</span>
+        <span id="autoBuyTitle">Auto Snipe Settings</span>
+      </div>
+      
+      <div class="checkbox-field">
+        <input type="checkbox" id="autoBuyEnabled">
+        <label for="autoBuyEnabled" id="autoBuyEnabledLabel">Enable Auto Snipe</label>
+      </div>
+      
+      <div class="inline-fields">
+        <div class="field">
+          <label for="autoBuyTimeWindow" id="autoBuyTimeWindowLabel">Time Window (sec)</label>
+          <input type="number" id="autoBuyTimeWindow" min="1" max="300" value="10">
+        </div>
+        <div class="field">
+          <label for="autoBuyMinDuplicates" id="autoBuyMinDuplicatesLabel">Min Duplicates</label>
+          <input type="number" id="autoBuyMinDuplicates" min="2" max="20" value="2">
+        </div>
+      </div>
+      <div class="hint" id="autoBuyHint">Auto buy first token when X duplicates appear within Y seconds</div>
+      <div class="hint highlight" id="autoBuyColumnHint">※ Only monitors the first column (New Created)</div>
+      
+      <div class="warning-text" id="autoBuyWarning">
+        ⚠️ Warning: Auto buy will use GMGN's internal buy button. Make sure you have set the buy amount in GMGN settings first!
+      </div>
+    </div>
+    
+    <div class="divider"></div>
+    
+    <!-- Filter Settings -->
+    <div class="section-title">
+      <span class="icon">🔍</span>
+      <span id="filterTitle">Filter Settings</span>
+    </div>
     
     <div class="field">
       <label for="windowMinutes" id="timeWindowLabel">Time Window (min)</label>

@@ -1,8 +1,8 @@
 {
   "extName": {
-    "message": "GMGN 同名首发过滤器"
+    "message": "GMGN首发代币狙击器"
   },
   "extDesc": {
-    "message": "在 gmgn.ai 上标记时间窗口内的首发代币并过滤同名重复项"
+    "message": "在 gmgn.ai 上自动狙击购买重名的首发代币"
   }
 }
