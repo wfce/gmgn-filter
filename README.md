@@ -1,4 +1,4 @@
-# GMGN 同名首发狙击器（GMGN Same-Name First Launch Sniper）
+# GMGN首发代币狙击器
 
 用于 gmgn.ai 的 Chrome 扩展：在代币列表中标记同名代币的「首发 / 非首发」，为非首发提供一键跳转首发按钮，并提供“自动狙击购买（Auto Snipe / Auto Buy）”能力：当短时间内出现多个同名代币时，自动识别首发并尝试点击 GMGN 内置 Buy/QuickBuy 按钮完成买入（仅模拟页面点击，不是链上机器人）。
 
