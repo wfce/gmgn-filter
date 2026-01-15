@@ -84,9 +84,9 @@ B. 备选：GitHub 手动安装（开发者模式）
 
 方式 A：git clone
 1) 克隆仓库
-   git clone https://github.com/wfce/gmgn-filter.git
+   git clone https://github.com/wfce/gmgn-sniper.git
 2) 进入目录（确认包含 manifest.json）
-   cd gmgn-filter
+   cd gmgn-sniper-main
 
 方式 B：下载 ZIP
 1) Code → Download ZIP
@@ -188,16 +188,25 @@ icons/
 2) 找到本扩展，点击 Reload（重新加载）
 3) 刷新 gmgn.ai 页面
 
-项目结构（示例）
-gmgn-filter/
+项目结构
+gmgn-sniper/
+
 ├── manifest.json
+
 ├── content.js
+
 ├── styles.css
+
 ├── popup.html
+
 ├── popup.js
+
 ├── icons/
+
 ├── _locales/
+
 ├── README.md
+
 └── PRIVACY.md
 
 -------------------------------------------------------------------------------
